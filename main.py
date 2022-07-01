@@ -115,9 +115,10 @@ def pruneData(dataframe):
     return dataframe
 
 
-def compareToPlanet(planets, dataframe, exponents):
-    for planet in planets:
-        dataframe['similarityIndex_' + planet.name] = dataframe.apply(lambda row: similarityIndex(planet, exponents, row), axis=1)
+def compareToPlanet(planet, dataframes, exponents):
+    for i in range(len(dataframes)):
+        df = dataframes[i]
+        df['similarityIndex_' + planet.name] = df.apply(lambda row: similarityIndex(planet, exponents[i], row), axis=1)
 
 
 def calc(dataframe):
@@ -168,18 +169,17 @@ os.mkdir(path)
 os.mkdir(path + '/plots')
 os.mkdir(path + '/csvs')
 
-for i in range(len(dataframes)):
-    d = dataframes[i]
-    referenceName = referenceBodies[i]
-    exp = exponents[i]
-    os.mkdir(path + '/plots/' + 'ref' + referenceName)
-    os.mkdir(path + '/csvs/' + 'ref' + referenceName)
-    compareToPlanet(planets, d, exp)
-    for planet in planets:
-        name = planet.name
+for planet in planets:
+    name = planet.name
+    os.mkdir(path + '/plots/' + name)
+    os.mkdir(path + '/csvs/' + name)
+    for i in range(len(dataframes)):
+        d = dataframes[i]
+        referenceName = referenceBodies[i]
+        compareToPlanet(planet, dataframes, exponents)
         d.plot.scatter(x='planetEarthRads', y=('similarityIndex_' + name), title=name + ", modeled by " + referenceName)
-        plt.savefig(path + '/plots/' + 'ref' + referenceName + '/' + name + '.png')
-        d.to_csv(path + '/csvs/' + 'ref' + referenceName + '/' + name + '.csv')
+        plt.savefig(path + '/plots/' + name + '/ref' + referenceName + '.png')
+        d.to_csv(path + '/csvs/' + name + '/ref' + referenceName + '.csv')
 
 # display(df)
 # we get some pretty big values here. sus
