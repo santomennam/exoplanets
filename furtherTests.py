@@ -86,6 +86,6 @@ exoplanetData['ESI'] = calcESI([1, 1, 288, 1], [exoplanetData['planetEarthRads']
 
 # Prints out some relevant data
 print(exoplanetData)
-print(exoplanetData.loc[exoplanetData['surfaceTemperature'].idxmax()])
+print(exoplanetData.loc[exoplanetData['ESI'].idxmax()])
 print(calcSurfTemp(sunRadius, 5772, AU))
 
