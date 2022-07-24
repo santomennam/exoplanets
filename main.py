@@ -1,34 +1,55 @@
 import pandas as pd
 import math
+from math import pi
 import os
 from datetime import datetime
 from matplotlib import pyplot as plt
 from IPython.display import display
 
-stefanBoltzmannsConstant = 5.67e-8
+stefanBoltzmannConstant = 5.67e-8
 earthDistFromSun = 149.6e9  # km
 earthEquilTemp = 278.5  # kelvin
+AU = 1.5 * pow(10, 8)
+G = 6.67408 * pow(10, -11)
+
+# CONSTANTS
+sunRadius = 696342
+
+earthMass = 5.9722 * pow(10, 24)
+earthRadius = 6371000
+earthDensity = 5.515
+earthEscapeVel = 11200
 
 
-def stellarFlux(luminosity, distance):
-    if type(luminosity == 'str'):
-        luminosity = float(luminosity)
-    return luminosity / (4 * math.pi * distance * distance)
+
+# Returns the density of the planet in earth densities given the mass in earth masses and the radius in earth radii
+def calcDensity(mass, radius):
+    volume = (4 / 3) * pi * pow(radius * earthRadius, 3)
+    return ((mass * earthMass / volume) / 1000) / earthDensity
 
 
-# The factor beta is the fraction of the planet surface that re-radiates the absorbed flux, b = 1 for fast rotators and b ~= 0.5 for tidally locked planets without oceans or atmospheres
-def equilibriumTemp(luminosity, distance, stellarRadius, albedo, beta, emissivity=1):
-    return pow(((1 - albedo) * stellarFlux(luminosity, distance)) / (4 * beta * emissivity * stefanBoltzmannsConstant), 0.25)
+def calcEscapeVel(eMass, eRadius):
+    mass = eMass * earthMass
+    radius = eRadius * earthRadius
+    return pow((2 * G * mass) / radius, (1 / 2)) / earthEscapeVel
+
     # see eqs 1 and 2 in Méndez, A. and Rivera-Valentín, E.G., 2017. The equilibrium temperature of planets in elliptical orbits. The Astrophysical Journal Letters, 837(1), p.L1.
 
 
-def surfaceTemp(greenhouse, luminosity, beta, distance, albedo, emissivity=1):
-    return earthEquilTemp * pow(((1 - albedo) * luminosity / (beta * emissivity * (1 - greenhouse) * distance * distance)), 0.25)
-
-
-def newSurfaceTemp(greenhouse, luminosity, beta, distance, albedo, emissivity=1):
-    return earthEquilTemp * pow((1 - albedo) / (1 - greenhouse), 0.25) * pow(stellarFlux(luminosity, distance) / stellarFlux(1, 1), 0.25)
-
+def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
+    # print("in calculate surface temp. stellarRadius: ", stellarRadius, " starEffTemp: ", starEffTemp, " semimajor: ", semimajor)
+    if "solarBody" in kwargs.keys() is not None:
+        p = kwargs["solarBody"]
+        container = (p.albedo, p.greenhouse)
+    elif "albedo" in kwargs.keys() and "greenhouse" in kwargs.keys():
+        container = (kwargs["albedo"], kwargs["greenhouse"])
+    else:
+        raise Exception('Must provide a solar body or albedo and greenhouse')
+    # print("container: ", container)
+    flux = (stefanBoltzmannConstant * pow(stellarRadius, 2) * pow(starEffTemp, 4)) / pow(semimajor, 2)
+    temp = pow(((1 - container[0]) * flux) / ((4 * stefanBoltzmannConstant) * (1 - container[1])), (1 / 4))
+    # print("temp: ", temp)
+    return temp
 
 # list of exponents for: mass, radius, eTemp, calculatedEqEarthTemp, calculatedEqVenusTemp, calculatedEqMarsTemp, calculatedEqTitanTemp, calculatedSurfaceEarthTemp,
 # calculatedSurfaceVenusTemp, calculatedSurfaceMarsTemp, calculatedSurfaceTitanTemp
@@ -46,60 +67,53 @@ def newSurfaceTemp(greenhouse, luminosity, beta, distance, albedo, emissivity=1)
 # where xp is the planetary reference value, x_i is the actual value of the comparison planet, and m is the number of properties.
 # takes a list of planets, each with a list of list of exponents and their own characteristics. these are the base planets.
 # also takes a dataframe row and compares the reference planets to the real database planet.
-def similarityIndex(referencePlanetSystem, exponents, row):
-    if 'earthMass' and 'planetEarthRads' and 'equilTemp' in row.keys():
-        p = referencePlanetSystem
-        xp = [p.mass, p.radius, p.eTemp, p.calculatedEqEarthTemp, p.calculatedEqVenusTemp, p.calculatedEqMarsTemp, p.calculatedEqTitanTemp, p.calculatedSurfaceEarthTemp, p.calculatedSurfaceVenusTemp,
-              p.calculatedSurfaceMarsTemp, p.calculatedSurfaceTitanTemp]
-        x = [row['earthMass'], row['planetEarthRads'], row['equilTemp'], row['calculatedEqEarthTemp'], row['calculatedEqVenusTemp'], row['calculatedEqMarsTemp'], row['calculatedEqTitanTemp'],
-             row['calculatedSurfaceEarthTemp'],
-             row['calculatedSurfaceVenusTemp'], row['calculatedSurfaceMarsTemp'], row['calculatedSurfaceTitanTemp']]
-        product = 1
-        for i in range(len(exponents)):
-            product *= pow(1 - abs((xp[i] - x[i]) / (xp[i] + x[i])), exponents[i])
-        return product
-        #     products.append(product)
-        # return products
-        # right now only looks at one set of exponents, could look at more
 
 
-class planetSystem:
-    def __init__(self, name, luminosity, distance, stellarRadius, albedo, beta, radius, mass, emissivity=1):
-        self.mass = mass  # in earth masses
-        self.radius = radius  # earth radii
-        self.name = name  # name of planet
-        self.luminosity = luminosity  # in stellar units
-        self.distance = distance  # in au
-        self.stellarRadius = stellarRadius  # sun radii
+def calcESI(refVals, vals, weights):
+    esi = 1
+    # print("refVals: ", refVals, " vals: ", vals, " weights: ", weights, "\n")
+    for i, val in enumerate(vals):
+        esi *= pow(1 - abs((refVals[i] - val) / (refVals[i] + val)), weights[i])
+    # # print(refVals, " , ", vals, ", ", weights, ", ", esi)
+    # print("esi: ", esi)
+    return esi
+
+
+class solarBody:
+    def __init__(self, name, albedo, greenhouseConstant):
+        self.name = name
         self.albedo = albedo
-        self.beta = beta  # fraction of the planet that re-radiates the absorbed flux, default 1
-        self.emissivity = emissivity  # usually ~1
-        # self.eTemp, self.calculatedEqEarthTemp, self.calculatedEqVenusTemp, self.calculatedEqMarsTemp, self.calculatedEqTitanTemp, self.calculatedSurfaceEarthTemp, self.calculatedSurfaceVenusTemp, self.calculatedSurfaceMarsTemp, self.calculatedSurfaceTitanTemp = 0
+        self.greenhouse = greenhouseConstant
 
-    def calcs(self, luminosity, distance, albedo, stellarRadius):
-        self.luminosity, self.distance, self.albedo, self.stellarRadius = luminosity, distance, albedo, stellarRadius
-        self.eTemp = equilibriumTemp(self.luminosity, self.stellarRadius, self.distance, self.albedo, self.beta)
-        self.calculatedEqEarthTemp = equilibriumTemp(self.luminosity, self.distance, self.stellarRadius, 0.301, 1)
-        self.calculatedEqVenusTemp = equilibriumTemp(self.luminosity, self.distance, self.stellarRadius, 0.760, 1)
-        self.calculatedEqMarsTemp = equilibriumTemp(self.luminosity, self.distance, self.stellarRadius, 0.250, 1)
-        self.calculatedEqTitanTemp = equilibriumTemp(self.luminosity, self.distance, self.stellarRadius, 0.265, 1)
-        self.calculatedSurfaceEarthTemp = surfaceTemp(0.385, self.luminosity, 1, self.distance, 0.301, 1)
-        self.calculatedSurfaceVenusTemp = surfaceTemp(0.990, self.luminosity, 1, self.distance, 0.760, 1)
-        self.calculatedSurfaceMarsTemp = surfaceTemp(0.073, self.luminosity, 1, self.distance, 0.250, 1)
-        self.calculatedSurfaceTitanTemp = surfaceTemp(0.338, self.luminosity, 1, self.distance, 0.265, 1)
+
+
+class compBody:
+    def __init__(self, name, semimajor, earthRads, escapeVel, surfaceTemp, density):
+        self.semimajor = semimajor #in km
+        self.radius = earthRads  # earth radii
+        self.name = name  # name of planet
+        self.escapeVel = escapeVel  # escape velocity in earth escape vels
+        self.surfTemp = surfaceTemp  # surface temperature in kelvin
+        self.density = density  # density in earth densities
+
+    def surfaceTemps(self, earth, venus, mars, titan):
+        self.surfaceEarthTemp = calcSurfTemp(sunRadius, 5870, self.semimajor, solarBody=earth)
+        self.surfaceVenusTemp = calcSurfTemp(sunRadius, 5870, self.semimajor, solarBody=venus)
+        self.surfaceMarsTemp = calcSurfTemp(sunRadius, 5870, self.semimajor, solarBody=mars)
+        self.surfaceTitanTemp = calcSurfTemp(sunRadius, 5870, self.semimajor, solarBody=titan)
+        self.refs = [self.radius, self.escapeVel, self.density, self.surfaceEarthTemp, self.surfaceVenusTemp, self.surfaceMarsTemp, self.surfaceTitanTemp]
 
     def setSurfaceTemp(self, temp):  # this is gimmicky as hell
-        self.eTemp, self.calculatedEqEarthTemp, self.calculatedEqVenusTemp, self.calculatedEqMarsTemp, self.calculatedEqTitanTemp, self.calculatedSurfaceEarthTemp, self.calculatedSurfaceVenusTemp, self.calculatedSurfaceMarsTemp, self.calculatedSurfaceTitanTemp = [temp] * 9
-
-
+        self.eTemp, self.calculatedEqEarthTemp, self.calculatedEqVenusTemp, self.calculatedEqMarsTemp, self.calculatedEqTitanTemp, self.calculatedSurfaceEarthTemp, self.calculatedSurfaceVenusTemp, self.calculatedSurfaceMarsTemp, self.calculatedSurfaceTitanTemp = [
+                                                                                                                                                                                                                                                                           temp] * 9
 
 # provided data is as follows:
-# Planet	T_(eq)	T_(s)	A_(b)	G_(n)	kappa
+# Planet    T_(eq)    T_(s)    A_(b)    G_(n)    kappa
 # ------------------------------------------------
-# Venus	     229	730	    0.760	0.990	2.213
-# Earth	     255	288	    0.301	0.385	1.033
-# Mars	     210	214	    0.250	0.073	0.948
-# Titan	     84	94	0.265	0.338	1.027
+# Venus         229    730        0.760    0.990    2.213
+# Earth         255    288        0.301    0.385    1.033
+# Mars         210    214        0.250    0.073    0.948
+# Titan         84    94    0.265    0.338    1.027
 
 # outputted T_s as of 6/22/22:
 # venus: 724.800
@@ -108,78 +122,102 @@ class planetSystem:
 # titan: 92.7514
 # (pretty good)
 
+def pruneData(df):
+    df = df.drop('eccentricity', axis=1)
+    df = df.drop('earthFlux', axis=1)
+    df = df.drop('equilTemp', axis=1)
+    df = df.drop('stellarMass', axis=1)
+    df = df.drop('stLogSurfaceGrav', axis=1)
+    df = df.drop('Unnamed: 14', axis=1)
+    df = df.drop('luminosity', axis=1)
 
-# remove all rows that have negative luminosities - need to find a way to deal with this.
-def pruneData(dataframe):
-    dataframe = dataframe[dataframe['luminosity'] > 0]
-    return dataframe
+    # Removes any exoplanets if its existence is controversial
+    hasData = df['controversial'] == 0
+    df = df[hasData]
 
+    # Removes any exoplanets that don't have the required data
+    df = df[df['planetSemimajor'].notna()]
+    df = df[df['planetEarthRads'].notna()]
+    df = df[df['earthMass'].notna()]
+    df = df[df['stellarRadius'].notna()]
+    df = df[df['stellarEffTemp'].notna()]
 
-def compareToPlanet(planet, dataframes, exponents):
-    for i in range(len(dataframes)):
-        df = dataframes[i]
-        df['similarityIndex_' + planet.name] = df.apply(lambda row: similarityIndex(planet, exponents[i], row), axis=1)
-
-
-def calc(dataframe):
-    dataframe['calculatedEqEarthTemp'] = dataframe.apply(lambda row: equilibriumTemp(row['luminosity'], row['planetSemimajor'], row['stellarRadius'], 0.301, 1), axis=1)
-    dataframe['calculatedEqVenusTemp'] = dataframe.apply(lambda row: equilibriumTemp(row['luminosity'], row['planetSemimajor'], row['stellarRadius'], 0.760, 1), axis=1)
-    dataframe['calculatedEqMarsTemp'] = dataframe.apply(lambda row: equilibriumTemp(row['luminosity'], row['planetSemimajor'], row['stellarRadius'], 0.250, 1), axis=1)
-    dataframe['calculatedEqTitanTemp'] = dataframe.apply(lambda row: equilibriumTemp(row['luminosity'], row['planetSemimajor'], row['stellarRadius'], 0.265, 1), axis=1)
-
-    dataframe['calculatedSurfaceEarthTemp'] = dataframe.apply(lambda row: surfaceTemp(0.385, row['luminosity'], 1, row['planetSemimajor'], 0.301, 1), axis=1)
-    dataframe['calculatedSurfaceVenusTemp'] = dataframe.apply(lambda row: surfaceTemp(0.990, row['luminosity'], 1, row['planetSemimajor'], 0.760, 1), axis=1)
-    dataframe['calculatedSurfaceMarsTemp'] = dataframe.apply(lambda row: surfaceTemp(0.073, row['luminosity'], 1, row['planetSemimajor'], 0.250, 1), axis=1)
-    dataframe['calculatedSurfaceTitanTemp'] = dataframe.apply(lambda row: surfaceTemp(0.338, row['luminosity'], 0.5, row['planetSemimajor'], 0.265, 1), axis=1)
+    return df
 
 
-# print("old earth: " + str(surfaceTemp(0.385, 1, 1, 1, 0.301, 1)) + "\nold venus: " + str(surfaceTemp(0.990, 1, 1, 0.7233, 0.760, 1)) + "\nold mars: " + str(
-#     surfaceTemp(0.073, 1, 1, 1.5273, 0.250, 1)) + "\nold titan: " + str(surfaceTemp(0.338, 1, 1, 9.5, 0.265, 1)))
-# print("\nnew earth: " + str(newSurfaceTemp(0.385, 1, 1, 1, 0.301, 1)) + "\nnew venus: " + str(newSurfaceTemp(0.990, 1, 1, 0.7233, 0.760, 1)) + "\nnew mars: " + str(
-#     newSurfaceTemp(0.073, 1, 1, 1.5273, 0.250, 1)) + "\nnew titan: " + str(newSurfaceTemp(0.338, 1, 1, 9.5, 0.265, 1)))
+def dfCalcs(df):
+    # Converts all stellar radii from solar radii to km and all planet semi-major axis from AU to km
+    df['stellarRadius'] *= sunRadius
+    df['planetSemimajor'] *= AU
+
+    # Adds and fills out the density, surface temperature, escape velocity, and earth similarity index columns
+    df['density'] = calcDensity(df['earthMass'], df['planetEarthRads'])
+    df['escapeVelocity'] = calcEscapeVel(df['earthMass'], df['planetEarthRads'])
+    df['surfaceEarthTemp'] = df.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarEarth), axis=1)
+    df['surfaceVenusTemp'] = df.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarVenus), axis=1)
+    df['surfaceMarsTemp'] = df.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarMars), axis=1)
+    df['surfaceTitanTemp'] = df.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarTitan), axis=1)
+
+    return df
+
+
+############ NEEDS WORK FROM HERE DOWN ##############
+
+
+def compareToPlanet(compBody, dataframe, exponents):
+        df = dataframe
+        # print("solarBody refs: ", solarBody.refs)
+        df['similarityIndex_' + compBody.name] = df.apply(lambda row: calcESI(compBody.refs, [row['planetEarthRads'], row['escapeVelocity'], row['density'], row['surfaceEarthTemp'], row['surfaceVenusTemp'], row['surfaceMarsTemp'], row['surfaceTitanTemp']], exponents), axis=1)
 
 # when creating planets, enter 0 for stellar radius, distance, luminosity, and albedo if unknown.
 # if known, call the "calcs" function on the planet object after creation
-Earth = planetSystem('Earth', 1, 1, 1, 0.301, 1, 1, 1)
-Earth.calcs(1, 1, 0.301, 1)
-Venus = planetSystem('Venus', 1, 0.73, 1, 0.760, 0.6, 0.949, 0.815)  # beta = 0.6 is a guess
-Venus.calcs(1, 0.73, 0.760, 1)
-Mars = planetSystem('Mars', 1, 1.52, 1, 0.250, 1, 0.532, 0.107)
-Mars.calcs(1, 1.52, 0.250, 1)
-Titan = planetSystem('Titan', 1, 9.5, 1, 0.265, 0.5, 0.404, 0.0225)  # , [1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1], [1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]]))
-Titan.calcs(1, 9.5, 0.265, 1)
-Arrakis = planetSystem('Arrakis', 0, 0, 0, 0, 1, 0.2723366, 0.0667)
-Arrakis.setSurfaceTemp(325) # from the wiki or literature # star is canopus
+# Creating solarBodies for references
+solarEarth = solarBody('Earth', 0.301, 0.385)
+solarVenus = solarBody('Venus', 0.760, 0.990)
+solarMars = solarBody('Mars', 0.250, 0.073)
+solarTitan = solarBody('Titan', 0.265, 0.338)
 
-planets = [Earth, Venus, Mars, Titan, Arrakis]
+# Creating planets from real life or sci fi
+# name, semimajor, rads, escape, surface temp, density
+compEarth = compBody('Earth', AU, 1, 1, 288, 1)
+compArrakis = compBody('Arrakis', 0.58*AU, 0.27, 5536.143/earthEscapeVel, 325, 3585)
+compJupiter = compBody('Jupiter', 5.2038*AU, 11.2, 5.317247, -238, 0.2404)
 
+
+# Arrakis = planetSystem('Arrakis', 0, 0, 0, 0, 1, 0.2723366, 0.0667)
+# Arrakis.setSurfaceTemp(325)  # from the wiki or literature # star is canopus
+
+# collecting
+
+solarBodies = [solarEarth, solarVenus, solarMars, solarTitan]
+
+
+compBodies = [compEarth, compArrakis,compJupiter]  # , Arrakis]
+
+
+for body in compBodies:
+    body.surfaceTemps(solarEarth, solarVenus, solarMars, solarTitan) #MUST CALL!
+print(compBodies[0].surfaceEarthTemp)
+# import and manage data
 df = pd.read_csv('src\exoData.csv')
 df = pruneData(df)
-calc(df)
-earthReference = df.copy()
-venusReference = df.copy()
-marsReference = df.copy()
-titanReference = df.copy()
+df = dfCalcs(df)
 
-exponents = [[1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0], [1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0], [1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0], [1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1]]
-dataframes = [earthReference, venusReference, marsReference, titanReference]
-referenceBodies = ["Earth", "Venus", "Mars", "Titan"]
+
+exponents = [1, 1, 1, 1, 0, 0, 0]
 path = 'src/outputs/' + str(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M")) + '/'
 os.mkdir(path)
 os.mkdir(path + '/plots')
 os.mkdir(path + '/csvs')
 
-for planet in planets:
-    name = planet.name
+for body in compBodies:
+    name = body.name
     os.mkdir(path + '/plots/' + name)
     os.mkdir(path + '/csvs/' + name)
-    for i in range(len(dataframes)):
-        d = dataframes[i]
-        referenceName = referenceBodies[i]
-        compareToPlanet(planet, dataframes, exponents)
-        d.plot.scatter(x='planetEarthRads', y=('similarityIndex_' + name), title=name + ", modeled by " + referenceName)
-        plt.savefig(path + '/plots/' + name + '/ref' + referenceName + '.png')
-        d.to_csv(path + '/csvs/' + name + '/ref' + referenceName + '.csv')
+    compareToPlanet(body, df, exponents)
+    df.plot.scatter(x='planetEarthRads', y=('similarityIndex_' + name), title=name)
+    plt.savefig(path + '/plots/' + name + '/ref' + name + '.png')
+    df.to_csv(path + '/csvs/' + name + '/ref' + name + '.csv')
 
 # display(df)
 # we get some pretty big values here. sus
