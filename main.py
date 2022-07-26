@@ -6,6 +6,8 @@ from datetime import datetime
 from matplotlib import pyplot as plt
 from IPython.display import display
 
+pd.set_option('display.max_columns', None)
+
 stefanBoltzmannConstant = 5.67e-8
 earthDistFromSun = 149.6e9  # km
 earthEquilTemp = 278.5  # kelvin
@@ -180,8 +182,15 @@ solarTitan = solarBody('Titan', 0.265, 0.338)
 # Creating planets from real life or sci fi
 # name, semimajor, rads, escape, surface temp, density
 compEarth = compBody('Earth', AU, 1, 1, 288, 1)
-compArrakis = compBody('Arrakis', 0.58*AU, 0.27, 5536.143/earthEscapeVel, 325, 3585)
-compJupiter = compBody('Jupiter', 5.2038*AU, 11.2, 5.317247, -238, 0.2404)
+compJupiter = compBody('Jupiter', 5.2038*AU, 11.2, 5.317247, 123, 0.2404)
+compArrakis = compBody('Arrakis', 2.3*AU, 0.979, calcEscapeVel(0.843, 0.979), 325, calcDensity(0.843, 0.979))
+compErid = compBody('Erid', 0.4*AU, 2, calcEscapeVel(8, 2), 420, calcDensity(8, 2))
+compMesklin = compBody('Mesklin', 3.3*AU, 7.85, calcEscapeVel(5086.51, 7.85), 100, calcDensity(5086.51, 7.85))
+compHabranah = compBody('Habranah', 1.5*AU, 0.21, calcEscapeVel(0.01, 0.21), 195, calcDensity(0.01, 0.21))
+compDhrawn = compBody('Dhrawn', 0.3*AU, 8.5, calcEscapeVel(3000, 8.5), 250, calcDensity(3000, 8.5))
+compHekla = compBody('Hekla', 0.3*AU, 2, calcEscapeVel(1.45, 2), 260, calcDensity(1.45, 2))
+compSarr = compBody('Sarr', 1.6*AU, 0.76, calcEscapeVel(0.45, 0.76), 800, calcDensity(0.45, 0.76))
+compTenebra = compBody('Tenebra', 2*AU, 3, calcEscapeVel(27, 3), 650, calcDensity(27, 3))
 
 
 # Arrakis = planetSystem('Arrakis', 0, 0, 0, 0, 1, 0.2723366, 0.0667)
@@ -192,20 +201,21 @@ compJupiter = compBody('Jupiter', 5.2038*AU, 11.2, 5.317247, -238, 0.2404)
 solarBodies = [solarEarth, solarVenus, solarMars, solarTitan]
 
 
-compBodies = [compEarth, compArrakis,compJupiter]  # , Arrakis]
+compBodies = [compEarth, compJupiter, compArrakis, compErid, compMesklin, compHabranah, compDhrawn, compHekla, compSarr, compTenebra]  # , Arrakis]
 
 
 for body in compBodies:
     body.surfaceTemps(solarEarth, solarVenus, solarMars, solarTitan) #MUST CALL!
 print(compBodies[0].surfaceEarthTemp)
 # import and manage data
-df = pd.read_csv('src\exoData.csv')
+df = pd.read_csv('exoData.csv')
 df = pruneData(df)
 df = dfCalcs(df)
+print(df)
 
 
 exponents = [1, 1, 1, 1, 0, 0, 0]
-path = 'src/outputs/' + str(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M")) + '/'
+path = 'outputs/' + str(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M")) + '/'
 os.mkdir(path)
 os.mkdir(path + '/plots')
 os.mkdir(path + '/csvs')
