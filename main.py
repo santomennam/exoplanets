@@ -36,7 +36,6 @@ def calcEscapeVel(eMass, eRadius):
 
     # see eqs 1 and 2 in Méndez, A. and Rivera-Valentín, E.G., 2017. The equilibrium temperature of planets in elliptical orbits. The Astrophysical Journal Letters, 837(1), p.L1.
 
-
 def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
     # print("in calculate surface temp. stellarRadius: ", stellarRadius, " starEffTemp: ", starEffTemp, " semimajor: ", semimajor)
     if "solarBody" in kwargs.keys() is not None:
@@ -51,24 +50,6 @@ def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
     temp = pow(((1 - container[0]) * flux) / ((4 * stefanBoltzmannConstant) * (1 - container[1])), (1 / 4))
     # print("temp: ", temp)
     return temp
-
-# list of exponents for: mass, radius, eTemp, calculatedEqEarthTemp, calculatedEqVenusTemp, calculatedEqMarsTemp, calculatedEqTitanTemp, calculatedSurfaceEarthTemp,
-# calculatedSurfaceVenusTemp, calculatedSurfaceMarsTemp, calculatedSurfaceTitanTemp
-
-# sample exponents:
-# earth:         [1,1,1,1,0,0,0,1,0,0,0]
-# venus:         [1,1,1,0,1,0,0,0,1,0,0]
-# mars:          [1,1,1,0,0,1,0,0,0,1,0]
-# titan:         [1,1,1,0,0,0,1,0,0,0,1]
-# no temp:       [1,1,1,0,0,0,0,0,0,0,0]
-# body-neutral:  [1,1,1,1,1,1,1,1,1,1,1]
-
-
-#  SI = product(i=1->m) of (1-abs((xp_i-x_i)/(xp_i+x_i)))^w_i
-# where xp is the planetary reference value, x_i is the actual value of the comparison planet, and m is the number of properties.
-# takes a list of planets, each with a list of list of exponents and their own characteristics. these are the base planets.
-# also takes a dataframe row and compares the reference planets to the real database planet.
-
 
 def calcESI(refVals, vals, weights):
     esi = 1
@@ -177,8 +158,7 @@ def compareToPlanet(compBody, dataframe, exponents):
     # print("solarBody refs: ", solarBody.refs)
     df['similarityIndex_' + compBody.name] = df.apply(lambda row: calcESI(compBody.refs, [row['planetEarthRads'], row['escapeVelocity'], row['density'], row['surfaceEarthTemp'], row['surfaceVenusTemp'], row['surfaceMarsTemp'], row['surfaceTitanTemp']], exponents), axis=1)
 
-# when creating planets, enter 0 for stellar radius, distance, luminosity, and albedo if unknown.
-# if known, call the "calcs" function on the planet object after creation
+
 # Creating solarBodies for references
 solarEarth = solarBody('Earth', 0.301, 0.385)
 solarVenus = solarBody('Venus', 0.760, 0.990)
@@ -198,22 +178,14 @@ compHekla = compBody('Hekla', 0.3*AU, 2, calcEscapeVel(1.45, 2), 260, calcDensit
 compSarr = compBody('Sarr', 1.6*AU, 0.76, calcEscapeVel(0.45, 0.76), 800, calcDensity(0.45, 0.76))
 compTenebra = compBody('Tenebra', 2*AU, 3, calcEscapeVel(27, 3), 650, calcDensity(27, 3))
 
-
-# Arrakis = planetSystem('Arrakis', 0, 0, 0, 0, 1, 0.2723366, 0.0667)
-# Arrakis.setSurfaceTemp(325)  # from the wiki or literature # star is canopus
-
-# collecting
-
 solarBodies = [solarEarth, solarVenus, solarMars, solarTitan]
-
 
 compBodies = [compEarth, compJupiter, compArrakis, compErid, compMesklin, compHabranah, compDhrawn, compHekla, compSarr,
               compTenebra]  # , Arrakis]
 
-
 for body in compBodies:
-    body.setSurfaceTemp(body.surfTemp)  # MUST CALL!
-#print(compBodies[0].surfaceEarthTemp)
+    body.setSurfaceTemp(body.surfTemp)  # MUST CALL! -> this can be expedited, is an explicit call in case of surface temperature calculations being performed on the fly
+
 # import and manage data
 df = pd.read_csv('exoData.csv')
 df = pruneData(df)
@@ -230,9 +202,7 @@ for body in compBodies:
     os.mkdir(path + '/plots/' + name)
     os.mkdir(path + '/csvs/' + name)
     compareToPlanet(body, df, exponents)
-    df.plot.scatter(x='planetEarthRads', y=('similarityIndex_' + name), title=name)
+    df.plot.scatter(x='surfaceEarthTemp', y=('similarityIndex_' + name),  c='planetEarthRads', colormap='viridis', title=name)
     plt.savefig(path + '/plots/' + name + '/ref' + name + '.png')
     df.to_csv(path + '/csvs/' + name + '/ref' + name + '.csv')
 
-# display(df)
-# we get some pretty big values here. sus
