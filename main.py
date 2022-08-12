@@ -51,6 +51,7 @@ def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
     # print("temp: ", temp)
     return temp
 
+
 def calcESI(refVals, vals, weights):
     esi = 1
     # print("refVals: ", refVals, " vals: ", vals, " weights: ", weights, "\n")
@@ -159,6 +160,20 @@ def compareToPlanet(compBody, dataframe, exponents):
     df['similarityIndex_' + compBody.name] = df.apply(lambda row: calcESI(compBody.refs, [row['planetEarthRads'], row['escapeVelocity'], row['density'], row['surfaceEarthTemp'], row['surfaceVenusTemp'], row['surfaceMarsTemp'], row['surfaceTitanTemp']], exponents), axis=1)
 
 
+# Dumps the top five planets of a value 'value' and from a dataframe 'inFrame' to a csv in location 'path'
+def getMatchesCSV(inFrame, value, path):
+    dataframe = inFrame.copy()
+    dataframe.drop(dataframe.columns.difference(['Name', 'planetEarthRads', 'density', 'escapeVelocity',
+                                                 'surfaceEarthTemp', value]), 1, inplace=True)
+    outFrame = pd.DataFrame(columns=dataframe.columns)
+    for i in range(5):
+        highestIndex = dataframe[value].idxmax()
+        tempDict = dataframe.loc[highestIndex].to_dict()
+        outFrame = outFrame.append(tempDict, ignore_index=True)
+        dataframe = dataframe.drop(highestIndex)
+    outFrame.to_csv(path)
+
+
 # Creating solarBodies for references
 solarEarth = solarBody('Earth', 0.301, 0.385)
 solarVenus = solarBody('Venus', 0.760, 0.990)
@@ -205,4 +220,5 @@ for body in compBodies:
     df.plot.scatter(x='surfaceEarthTemp', y=('similarityIndex_' + name),  c='planetEarthRads', colormap='viridis', title=name)
     plt.savefig(path + '/plots/' + name + '/ref' + name + '.png')
     df.to_csv(path + '/csvs/' + name + '/ref' + name + '.csv')
+    getMatchesCSV(df, 'similarityIndex_' + name, path + '/csvs/' + name + '/topFive' + name + '.csv')
 
