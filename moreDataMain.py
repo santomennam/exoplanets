@@ -1,3 +1,5 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import math
 from math import pi
@@ -34,10 +36,8 @@ def calcEscapeVel(eMass, eRadius):
     radius = eRadius * earthRadius
     return pow((2 * G * mass) / radius, (1 / 2)) / earthEscapeVel
 
-    # see eqs 1 and 2 in Méndez, A. and Rivera-Valentín, E.G., 2017. The equilibrium temperature of planets in elliptical orbits. The Astrophysical Journal Letters, 837(1), p.L1.
-
+    # see eqs 1 and 6 in Méndez, A. and Rivera-Valentín, E.G., 2017. The equilibrium temperature of planets in elliptical orbits. The Astrophysical Journal Letters, 837(1), p.L1.
 def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
-    # print("in calculate surface temp. stellarRadius: ", stellarRadius, " starEffTemp: ", starEffTemp, " semimajor: ", semimajor)
     if "solarBody" in kwargs.keys() is not None:
         p = kwargs["solarBody"]
         container = (p.albedo, p.greenhouse)
@@ -45,12 +45,9 @@ def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
         container = (kwargs["albedo"], kwargs["greenhouse"])
     else:
         raise Exception('Must provide a solar body or albedo and greenhouse')
-    # print("container: ", container)
     flux = (stefanBoltzmannConstant * pow(stellarRadius, 2) * pow(starEffTemp, 4)) / pow(semimajor, 2)
     temp = pow(((1 - container[0]) * flux) / ((4 * stefanBoltzmannConstant) * (1 - container[1])), (1 / 4))
-    # print("temp: ", temp)
     return temp
-
 
 def calcESI(refVals, vals, weights):
     esi = 1
@@ -109,27 +106,20 @@ class compBody:
 # (pretty good)
 
 
-def pruneData(dataFrame):
-    dataFrame = dataFrame.drop('eccentricity', axis=1)
-    dataFrame = dataFrame.drop('earthFlux', axis=1)
-    dataFrame = dataFrame.drop('equilTemp', axis=1)
-    dataFrame = dataFrame.drop('stellarMass', axis=1)
-    dataFrame = dataFrame.drop('stLogSurfaceGrav', axis=1)
-    dataFrame = dataFrame.drop('Unnamed: 14', axis=1)
-    dataFrame = dataFrame.drop('luminosity', axis=1)
-
-    # Removes any exoplanets if its existence is controversial
-    hasData = dataFrame['controversial'] == 0
-    dataFrame = dataFrame[hasData]
-
+def pruneData(df):
+    print("Rows before prune: ", str(df.shape[0]))
     # Removes any exoplanets that don't have the required data
-    dataFrame = dataFrame[dataFrame['planetSemimajor'].notna()]
-    dataFrame = dataFrame[dataFrame['planetEarthRads'].notna()]
-    dataFrame = dataFrame[dataFrame['earthMass'].notna()]
-    dataFrame = dataFrame[dataFrame['stellarRadius'].notna()]
-    dataFrame = dataFrame[dataFrame['stellarEffTemp'].notna()]
+    df = df[df['planetSemimajor'].notna()]
+    df = df[df['planetEarthRads'].notna()]
+    df = df[df['earthMass'].notna()]
+    df = df[df['stellarRadius'].notna()]
+    df = df[df['stellarEffTemp'].notna()]
 
-    return dataFrame
+    df = df[df['controversial'] == 0]
+    df = df[~df['solution'].str.contains('Candidate')] #candidate not in soltype gets rid of kepler and tess candidates
+
+    print("Rows after prune: ", str(df.shape[0]))
+    return df
 
 
 def dfCalcs(dataFrame):
@@ -148,13 +138,10 @@ def dfCalcs(dataFrame):
     return dataFrame
 
 
-############ NEEDS WORK FROM HERE DOWN ##############
-
-
 def compareToPlanet(compBody, dataframe, exponents):
     df = dataframe
+    # print("solarBody refs: ", solarBody.refs)
     df['similarityIndex_' + compBody.name] = df.apply(lambda row: calcESI(compBody.refs, [row['planetEarthRads'], row['escapeVelocity'], row['density'], row['surfaceEarthTemp'], row['surfaceVenusTemp'], row['surfaceMarsTemp'], row['surfaceTitanTemp']], exponents), axis=1)
-
 
 # Dumps the top five planets of a value 'value' and from a dataframe 'inFrame' to a csv in location 'path'
 def getMatchesCSV(inFrame, value, path):
@@ -181,11 +168,11 @@ solarTitan = solarBody('Titan', 0.265, 0.338)
 compEarth = compBody('Earth', AU, 1, 1, 288, 1)
 compJupiter = compBody('Jupiter', 5.2038*AU, 11.2, 5.317247, 123, 0.2404)
 compArrakis = compBody('Arrakis', 2.3*AU, 0.979, calcEscapeVel(0.843, 0.979), 325, calcDensity(0.843, 0.979))
-compDhrawn = compBody('Dhrawn', 0.3*AU, 8.5, calcEscapeVel(3000, 8.5), 250, calcDensity(3000, 8.5))
 compErid = compBody('Erid', 0.224*AU, 2.01, calcEscapeVel(8.47, 2.01), 480, calcDensity(8.47, 2.01))
-compHabranah = compBody('Habranah', 1.5*AU, 0.21, calcEscapeVel(0.01, 0.21), 195, calcDensity(0.01, 0.21))
-compHekla = compBody('Hekla', 0.3*AU, 2, calcEscapeVel(1.45, 2), 260, calcDensity(1.45, 2))
 compMesklin = compBody('Mesklin', 3.3*AU, 7.85, calcEscapeVel(5086.51, 7.85), 100, calcDensity(5086.51, 7.85))
+compHabranah = compBody('Habranah', 1.5*AU, 0.21, calcEscapeVel(0.01, 0.21), 195, calcDensity(0.01, 0.21))
+compDhrawn = compBody('Dhrawn', 0.3*AU, 8.5, calcEscapeVel(3000, 8.5), 250, calcDensity(3000, 8.5))
+compHekla = compBody('Hekla', 0.3*AU, 2, calcEscapeVel(1.45, 2), 260, calcDensity(1.45, 2))
 compSarr = compBody('Sarr', 1.6*AU, 0.76, calcEscapeVel(0.45, 0.76), 800, calcDensity(0.45, 0.76))
 compTenebra = compBody('Tenebra', 2*AU, 3, calcEscapeVel(27, 3), 650, calcDensity(27, 3))
 
@@ -193,21 +180,22 @@ solarBodies = [solarEarth, solarVenus, solarMars, solarTitan]
 
 compBodies = [compEarth, compJupiter, compArrakis, compErid, compMesklin, compHabranah, compDhrawn, compHekla, compSarr,
               compTenebra]  # , Arrakis]
-print("Densities:")
+
+
+
 for body in compBodies:
     body.setSurfaceTemp(body.surfTemp)  # MUST CALL! -> this can be expedited, is an explicit call in case of surface temperature calculations being performed on the fly
-    print(body.name, body.density)
+
 # import and manage data
-df = pd.read_csv('exoData.csv')
+df = pd.read_csv('evenMoreExoData.csv')
 df = pruneData(df)
 df = dfCalcs(df)
 
 exponents = [1, 1, 1, 1, 0, 0, 0]
-path = 'outputs/' + str(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M")) + '/'
+path = 'outputs/' + "more "+str(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M")) + '/'
 os.mkdir(path)
 os.mkdir(path + '/plots')
 os.mkdir(path + '/csvs')
-
 compBodiesESI = pd.DataFrame(columns=["Name","ESI"])
 for compBody in compBodies:
     esi = calcESI(compEarth.refs, compBody.refs, exponents)
@@ -221,14 +209,28 @@ for body in compBodies:
     name = body.name
     os.mkdir(path + '/plots/' + name)
     os.mkdir(path + '/csvs/' + name)
+
     compareToPlanet(body, df, exponents)
-    # stats = df['similarityIndex_' + name].describe()
-    # print(stats)
+    plotPath = path + '/plots/' + name + '/'
+    df.plot.scatter(x='planetEarthRads', y=('similarityIndex_' + name),  c='surfaceEarthTemp', colormap='plasma', title=name)
+    plt.savefig(plotPath + name + 'Radius.png')
+    plt.close()
+    df.plot.scatter(x='surfaceEarthTemp', y=('similarityIndex_' + name), c='planetEarthRads', colormap='viridis', title=name)
+    plt.xlim(0, 2800) #  these are just manually discarding outliers for aesthetic reasons
+    plt.savefig(plotPath + name + 'Temp.png')
+    plt.close()
+    df.plot.scatter(x='distance', y=('similarityIndex_' + name), c='planetEarthRads', colormap='viridis', title=name)
+    plt.xlim(0, 3000)
+    plt.savefig(plotPath + name + 'Dist.png')
+    plt.close()
+    df.plot.scatter(x='orbitalPeriod', y=('similarityIndex_' + name), c='planetEarthRads', colormap='viridis', title=name)
+    plt.xlim(0, 400)
+    plt.savefig(plotPath + name + 'period.png')
+    plt.close()
     row = {"Name": [body.name], "Average": [df['similarityIndex_' + name].mean()]}
     averageSimilarity = averageSimilarity.append(row, ignore_index=True)
-    df.plot.scatter(x='surfaceEarthTemp', y=('similarityIndex_' + name),  c='planetEarthRads', colormap='viridis', title=name)
-    plt.savefig(path + '/plots/' + name + '/ref' + name + '.png')
-    df.to_csv(path + '/csvs/' + name + '/ref' + name + '.csv')
     getMatchesCSV(df, 'similarityIndex_' + name, path + '/csvs/' + name + '/topFive' + name + '.csv')
+df.to_csv(path + "data" + '.csv')
 averageSimilarity = averageSimilarity.sort_values('Name')
 averageSimilarity.to_csv(path + 'fictionalPlanetAverage.csv')
+
