@@ -10,13 +10,15 @@ from IPython.display import display
 
 pd.set_option('display.max_columns', None)
 
+
+#CONSTANTS
 stefanBoltzmannConstant = 5.67e-8  # W m^-2 K^-4
-earthDistFromSun = 149.6e9  # km
+earthDistFromSun = 149.6e8  # km
 earthEquilTemp = 278.5  # kelvin
 AU = 1.5 * pow(10, 8)  # km
 G = 6.67408 * pow(10, -11)  # m^3 kg^-1 s^-2
 
-# CONSTANTS
+# DIMENSIONS
 sunRadius = 696342  # km
 
 earthMass = 5.9722 * pow(10, 24)  # kg

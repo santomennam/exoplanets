@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/../MPCscraper/.idea/MPCscraper.iml" filepath="$PROJECT_DIR$/../MPCscraper/.idea/MPCscraper.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/exoplanets.iml" filepath="$PROJECT_DIR$/.idea/exoplanets.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../filterContacts/.idea/filterContacts.iml" filepath="$PROJECT_DIR$/../filterContacts/.idea/filterContacts.iml" />
     </modules>
   </component>
 </project>
