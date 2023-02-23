@@ -155,18 +155,24 @@ solarMars = solarBody('Mars', 0.250, 0.073)
 solarTitan = solarBody('Titan', 0.265, 0.338)
 solarErid = solarBody('Erid',0.014,0)
 
+#these constants will be used to define exponents
+r = 1/3
+v = 1/3
+d = 1/3
+x = 1
+
 # Creating planets from real life or sci fi
 # name, semimajor, rads, escape, surface temp, density
-compEarth = compBody('Earth', AU, 1, 1, 288, 1)
+compEarth = compBody('Earth', AU, 1, 1, 288, 1,[r,v,d,x,0,0,0])
 # compJupiter = compBody('Jupiter', 5.2038*AU, 11.2, 5.317247, 123, 0.2404)
-compArrakis = compBody('Arrakis', 2.3*AU, 0.979, calcEscapeVel(0.843, 0.979), 325, calcDensity(0.843, 0.979))
-compDhrawn = compBody('Dhrawn', 0.3*AU, 8.5, calcEscapeVel(3000, 8.5), 250, calcDensity(3000, 8.5))
-compErid = compBody('Erid', 0.224*AU, 2.01, calcEscapeVel(8.47, 2.01), 480, calcDensity(8.47, 2.01))
+compArrakis = compBody('Arrakis', 2.3*AU, 0.979, calcEscapeVel(0.843, 0.979), 325, calcDensity(0.843, 0.979),[r,v,d,x,0,0,0])
+compDhrawn = compBody('Dhrawn', 0.3*AU, 8.5, calcEscapeVel(3000, 8.5), 250, calcDensity(3000, 8.5),[r,v,d,0.5*x,0,0.5*x,0])
+compErid = compBody('Erid', 0.224*AU, 2.01, calcEscapeVel(8.47, 2.01), 480, calcDensity(8.47, 2.01), [r,v,d,x,0,0,0]) # <-- placeholder exponents for erid, need to discuss
 # compHabranah = compBody('Habranah', 1.5*AU, 0.21, calcEscapeVel(0.01, 0.21), 195, calcDensity(0.01, 0.21))
-compHekla = compBody('Hekla', 0.3*AU, 2, calcEscapeVel(1.45, 2), 260, calcDensity(1.45, 2))
-compMesklin = compBody('Mesklin', 3.3*AU, 7.85, calcEscapeVel(5086.51, 7.85), 100, calcDensity(5086.51, 7.85))
-compSarr = compBody('Sarr', 1.6*AU, 0.76, calcEscapeVel(0.45, 0.76), 800, calcDensity(0.45, 0.76))
-compTenebra = compBody('Tenebra', 2*AU, 3, calcEscapeVel(27, 3), 650, calcDensity(27, 3))
+compHekla = compBody('Hekla', 0.3*AU, 2, calcEscapeVel(1.45, 2), 260, calcDensity(1.45, 2),[r,v,d,0,0,x,0])
+compMesklin = compBody('Mesklin', 3.3*AU, 7.85, calcEscapeVel(5086.51, 7.85), 100, calcDensity(5086.51, 7.85),[r,v,d,0,0,0,x])
+compSarr = compBody('Sarr', 1.6*AU, 0.76, calcEscapeVel(0.45, 0.76), 800, calcDensity(0.45, 0.76),[r,v,d,0,x,0,0])
+compTenebra = compBody('Tenebra', 2*AU, 3, calcEscapeVel(27, 3), 650, calcDensity(27, 3),[r,v,d,0.25*x,0.75*x,0,0])
 
 #collect our solar bodies
 solarBodies = [solarEarth, solarVenus, solarMars, solarTitan]
