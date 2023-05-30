@@ -16,7 +16,7 @@ G = 6.67408 * pow(10, -11)  # m^3 kg^-1 s^-2
 
 # CONSTANTS
 sunRadius = 696342  # km
-
+solarLuminosity = 3.8282e26
 earthMass = 5.9722 * pow(10, 24)  # kg
 earthRadius = 6371000  # m
 earthDensity = 5520  # kg m^-3
@@ -34,23 +34,36 @@ def calcEscapeVel(eMass, eRadius):
     return pow((2 * G * mass) / radius, (1 / 2)) / earthEscapeVel
 
 
-def calcSurfTemp(stellarRadius, starEffTemp, semimajor, **kwargs):
+def calcSurfTemp(luminosity, semimajor, **kwargs):
     # first , we look for a solarBody in the kwargs. if one is provided, we use its albedo and greenhouse for the calculations
     if "solarBody" in kwargs.keys() is not None:
         p = kwargs["solarBody"]
-        albedo, greenhouse = p.albedo, p.greenhouse
+        albedo, greenhouse, antiGreenhouse = p.albedo, p.greenhouse, p.antiGreenhouse
     #here, we grab manually provided albedo and greenhouse if no solarBody was provided
-    elif "albedo" in kwargs.keys() and "greenhouse" in kwargs.keys():
-        albedo, greenhouse = kwargs["albedo"], kwargs["greenhouse"]
+    elif "albedo" in kwargs.keys() and "greenhouse" in kwargs.keys() and "antiGreenhouse" in kwargs.keys():
+        albedo, greenhouse, antiGreenhouse = kwargs["albedo"], kwargs["greenhouse"], kwargs["antiGreenhouse"]
     #uh oh
     else:
-        raise Exception('Must provide a solar body or albedo and greenhouse')
-    #this calculates incident stellar flux from eq 1 in mendez et al
-    flux = (stefanBoltzmannConstant * pow(stellarRadius, 2) * pow(starEffTemp, 4)) / pow(semimajor, 2)
-    #slightly modified version of eqs 2, 4, 5, and 6
-    temp = pow(((1 - albedo) * flux) / ((4 * stefanBoltzmannConstant) * (1 - greenhouse)), (1 / 4))
-    # print("temp: ", temp)
-    return temp
+        raise Exception('Must provide a solar body or albedo, greenhouse, and antiGreenhouse')
+
+    #solar luminosity will be in units of log[solar luminosity] - we need to convert to watts
+    luminosity = pow(10,luminosity)*solarLuminosity
+    #semimajor is already in units of km, multiply by 1000 for m
+    semimajor = semimajor * 10e3
+
+    effectiveTemp = pow(
+        (1 - albedo) * luminosity / (16 * pi * semimajor ** 2 * stefanBoltzmannConstant), 1 / 4)
+
+    surfaceTemp = pow((pow(effectiveTemp, 4) * (1 - antiGreenhouse) * (
+                1 + (3 / 4) * greenhouse) + antiGreenhouse / 2), 1 / 4)
+
+    # *** old way of doing it:
+    # #this calculates incident stellar flux from eq 1 in mendez et al.
+    # flux = (stefanBoltzmannConstant * pow(stellarRadius, 2) * pow(starEffTemp, 4)) / pow(semimajor, 2)
+    # #slightly modified version of eqs 2, 4, 5, and 6
+    # temp = pow(((1 - albedo) * flux) / ((4 * stefanBoltzmannConstant) * (1 - greenhouse)), (1 / 4))
+    # # print("temp: ", temp)
+    return surfaceTemp
 
 #perform the weighted product (ESI) calc
 def calcESI(refVals, vals, weights):
@@ -61,10 +74,11 @@ def calcESI(refVals, vals, weights):
 
 #define a class for storing earth, venus, etc
 class solarBody:
-    def __init__(self, name, albedo, greenhouseConstant):
+    def __init__(self, name, albedo, greenhouseConstant,antiGreenhouse):
         self.name = name
         self.albedo = albedo
         self.greenhouse = greenhouseConstant
+        self.antiGreenhouse = antiGreenhouse
 
 #these represent our science fiction exoplanets
 class compBody:
@@ -90,17 +104,20 @@ class compBody:
 
 def pruneData(dataFrame):
     #drop unnecessary columns
-    dataFrame = dataFrame.drop('eccentricity', axis=1)
-    dataFrame = dataFrame.drop('earthFlux', axis=1)
-    dataFrame = dataFrame.drop('equilTemp', axis=1)
-    dataFrame = dataFrame.drop('stellarMass', axis=1)
-    dataFrame = dataFrame.drop('stLogSurfaceGrav', axis=1)
-    dataFrame = dataFrame.drop('Unnamed: 14', axis=1)
-    dataFrame = dataFrame.drop('luminosity', axis=1)
+    # dataFrame = dataFrame.drop('eccentricity', axis=1)
+    # dataFrame = dataFrame.drop('earthFlux', axis=1)
+    # dataFrame = dataFrame.drop('equilTemp', axis=1)
+    # dataFrame = dataFrame.drop('stellarMass', axis=1)
+    # dataFrame = dataFrame.drop('stLogSurfaceGrav', axis=1)
+    # dataFrame = dataFrame.drop('Unnamed: 14', axis=1)
+    # dataFrame = dataFrame.drop('luminosity', axis=1)  #commented 5/29/23 by Sage because we need the luminosity to calculate surface temp now
 
     # Removes any exoplanets if its existence is controversial
-    hasData = dataFrame['controversial'] == 0
-    dataFrame = dataFrame[hasData]
+    dataFrame = dataFrame.loc[dataFrame['controversial'] == 0]
+    dataFrame = dataFrame.loc[dataFrame['defaultPlanetEntry'] == 1]  #avoid multiple entries of the same planet by only using the best entry
+
+    dataFrame = dataFrame[~dataFrame['solution'].str.contains('Candidate')] #candidate not in soltype gets rid of kepler and tess candidates
+
 
     # Removes any exoplanets that don't have the required data
     dataFrame = dataFrame[dataFrame['planetSemimajor'].notna()]
@@ -108,6 +125,8 @@ def pruneData(dataFrame):
     dataFrame = dataFrame[dataFrame['earthMass'].notna()]
     dataFrame = dataFrame[dataFrame['stellarRadius'].notna()]
     dataFrame = dataFrame[dataFrame['stellarEffTemp'].notna()]
+    dataFrame = dataFrame[dataFrame['luminosity'].notna()]
+
 
     return dataFrame
 
@@ -120,10 +139,10 @@ def dfCalcs(dataFrame):
     # Adds and fills out the density, surface temperature, and escape velocity columns
     dataFrame['density'] = calcDensity(dataFrame['earthMass'], dataFrame['planetEarthRads'])
     dataFrame['escapeVelocity'] = calcEscapeVel(dataFrame['earthMass'], dataFrame['planetEarthRads'])
-    dataFrame['surfaceEarthTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarEarth), axis=1)
-    dataFrame['surfaceVenusTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarVenus), axis=1)
-    dataFrame['surfaceMarsTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarMars), axis=1)
-    dataFrame['surfaceTitanTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['stellarRadius'], row['stellarEffTemp'], row['planetSemimajor'], solarBody=solarTitan), axis=1)
+    dataFrame['surfaceEarthTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['luminosity'], row['planetSemimajor'], solarBody=solarEarth), axis=1)
+    dataFrame['surfaceVenusTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['luminosity'], row['planetSemimajor'], solarBody=solarVenus), axis=1)
+    dataFrame['surfaceMarsTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['luminosity'], row['planetSemimajor'], solarBody=solarMars), axis=1)
+    dataFrame['surfaceTitanTemp'] = dataFrame.apply(lambda row: calcSurfTemp(row['luminosity'], row['planetSemimajor'], solarBody=solarTitan), axis=1)
 
     return dataFrame
 
@@ -149,11 +168,11 @@ def getMatchesCSV(inFrame, value, path):
 
 
 # Creating solarBodies for references
-solarEarth = solarBody('Earth', 0.301, 0.385)
-solarVenus = solarBody('Venus', 0.760, 0.990)
-solarMars = solarBody('Mars', 0.250, 0.073)
-solarTitan = solarBody('Titan', 0.265, 0.338)
-solarErid = solarBody('Erid',0.014,0)
+solarEarth = solarBody('Earth', 0.301, 0.385,0)
+solarVenus = solarBody('Venus', 0.760, 0.990,0)
+solarMars = solarBody('Mars', 0.250, 0.073,0)
+solarTitan = solarBody('Titan', 0.265, 0.338,4/7)
+solarErid = solarBody('Erid',0.014,0,0)
 
 #these constants will be used to define exponents
 r = 1/3
@@ -181,7 +200,8 @@ compBodies = [compEarth, compArrakis, compErid, compMesklin, compDhrawn, compHek
               compTenebra] #compHabranah and compJupiter eliminated 1/11/23 by ben and sage
 
 # import and manage data
-df = pd.read_csv('exoData.csv')
+# df = pd.read_csv('exoData.csv')
+df = pd.read_csv('2023.05.29_data.csv')
 df = pruneData(df)
 df = dfCalcs(df)
 
@@ -220,13 +240,32 @@ for body in compBodies:
     row = {"Name": [body.name], "Average": [df['similarityIndex_' + name].mean()]}
     averageSimilarity = averageSimilarity.append(row, ignore_index=True)
     # **** plot and save figs ---------------------------------------------------
-    df.plot.scatter(x='surfaceEarthTemp', y=('similarityIndex_' + name),  c='planetEarthRads', colormap='viridis', title=name)
-    plt.savefig(path + '/plots/' + name + '/ref' + name + '.png')
+    plotPath = path + '/plots/' + name + '/'
+    df.plot.scatter(x='planetEarthRads', y=('similarityIndex_' + name), c='surfaceEarthTemp', colormap='plasma',
+                    title=name)
+    plt.savefig(plotPath + name + 'Radius.png')
+    plt.close()
+    df.plot.scatter(x='surfaceEarthTemp', y=('similarityIndex_' + name), c='planetEarthRads', colormap='viridis',
+                    title=name)
+    # plt.xlim(0, 2800)  # these are just manually discarding outliers for aesthetic reasons
+    plt.savefig(plotPath + name + 'Temp.png')
+    plt.close()
+    df.plot.scatter(x='distance', y=('similarityIndex_' + name), c='planetEarthRads', colormap='viridis', title=name)
+    # plt.xlim(0, 3000)
+    plt.savefig(plotPath + name + 'Dist.png')
+    plt.close()
+    df.plot.scatter(x='orbitalPeriod', y=('similarityIndex_' + name), c='planetEarthRads', colormap='viridis',
+                    title=name)
+    # plt.xlim(0, 400)
+    plt.savefig(plotPath + name + 'period.png')
+    plt.close()
     # **** save to a csv --------------------------------------------------------
     df.to_csv(path + '/csvs/' + name + '/ref' + name + '.csv')
     # **** save top 5 matches to a csv ------------------------------------------
     getMatchesCSV(df, 'similarityIndex_' + name, path + '/csvs/' + name + '/topFive' + name + '.csv')
+df.to_csv(path + "data" + '.csv')
 
 # **** sort the averageSimilarity by name and then save it ----------------------
 averageSimilarity = averageSimilarity.sort_values('Name')
 averageSimilarity.to_csv(path + 'fictionalPlanetAverage.csv')
+print(averageSimilarity.to_string())
